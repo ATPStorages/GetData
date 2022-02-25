@@ -35,11 +35,11 @@ const args = cons
     .command('tagged', 'Open in Tumblr tagged mode')
     .example(`${filename}`, `Open in command selection`)
     .example(`${filename} config`, `Open in configuration mangement`)
-    .example(`${filename} -pc 20 -pt 3 -d all -o X:\\`, `Open in command selection with tagged options preset, download to another drive`)
-    .example(`${filename} -pc 20 -pt 3 -d images -o Data`, `Open in command selection with tagged options preset, download only images to "Data" in the executables directory`)
-    .example(`${filename} -pc 20 -pt 3 -d text -s true`, `Open in command selection with tagged options preset, download only stripped HTML text to "Data" in the executables directory`)
-    .example(`${filename} tagged -pc 20 -pt 1 -d all -t lol`, `Open in tagged mode and immediately start searching all posts, prompt for download location`)
-    .example(`${filename} tagged -pc 20 -pt 1 -o Data -d image,text -t lol`, `Autonomously search types "images" and "logs" in the tag "lol" then save outputs to "Data"`)
+    .example(`${filename} -p 20 -c 3 -d all -o X:\\`, `Open in command selection with tagged options preset, download to another drive`)
+    .example(`${filename} -p 20 -c 3 -d images -o Data`, `Open in command selection with tagged options preset, download only images to "Data" in the executables directory`)
+    .example(`${filename} -p 20 -c 3 -d text -s true`, `Open in command selection with tagged options preset, download only stripped HTML text to "Data" in the executables directory`)
+    .example(`${filename} tagged -p 20 -c 1 -d all -t lol`, `Open in tagged mode and immediately start searching all posts, prompt for download location`)
+    .example(`${filename} tagged -p 20 -c 1 -o Data -d image,text -t lol`, `Autonomously search types "images" and "logs" in the tag "lol" then save outputs to "Data"`)
     .alias('p', 'postcount')
     .nargs('p', 1)
     .describe('p', 'Amount of posts to collect per page.')
@@ -57,8 +57,11 @@ const args = cons
     .describe('s', 'If the "text" type option is enabled, strip HTML from collected text.')
     .alias('s', 'stripHTML')
     .nargs('s', 1)
+    .describe('l', 'Collects posts *before* this Unix timestamp.')
+    .alias('l', 'startTime')
+    .nargs('l', 1)
     .string(["out", "tag", "types"])
-    .number(["postcount", "pagecount"])
+    .number(["postcount", "pagecount", "startTime"])
     .boolean("stripHTML")
     .help('h')
     .alias('h', 'help')
@@ -284,102 +287,23 @@ async function apikeydload(key) {
         times = Number(await rl.question("How many times would you like to move pages? > "));
     } else { times = args.pagecount; }
 
+    const stnum = Number(args.startTime);
     let totposts = 0, totimages = 0, totaudio = 0, totvideo = 0, tottext = 0, udaudio = 0,
         images = {"name": "images", "store": new Map()}, audio = {"name": "audio", "store": new Map()}, 
         video = {"name": "video", "store": new Map()}, text = {"name": "text", "store": new Map()}, 
-        lts = Date.now()+1, errwarn = false;
+        lts = isNaN(stnum) ? Date.now()+1 : stnum, errwarn = false;
     const max = isNaN(times) ? 1 : times < 1 ? 1 : times;
     const lim = isNaN(num) ? 20 : num < 1 ? 1 : num > 20 ? 20 : Number(num);
 
     rl.pause();
-    for(let i = 0; i < max; i++) {
-        let conf, data = [];
-        await taggedPosts(tag, { before: lts, limit: lim }).then(ret => data = ret).catch(async err => {
-            console.error(chalk.red(`An error has occurred while trying to get posts in tag "${tag}"\n└ ${err}`));
-            if(!errwarn) {
-                console.log(chalk.blueBright("\n1 - Continue crawling"));
-                console.log(chalk.blueBright("2 - Skip to downloading"));
-                console.log(chalk.blueBright("3 - Halt program"));
-                const intnum = Number(await rl.question("What would you like to do? > "));
-                rl.pause();
-                conf = isNaN(intnum) ? 3 : intnum > 3 ? 3 : intnum < 1 ? 1 : intnum
-                if(conf === 3) {
-                    process.exit(0);
-                } else if (conf === 2) {
-                    errwarn = true;
-                    conf = true;
-                }
-            }
-        });
-        
-        if(conf === true) break;
-        if(data.length > 0 && data.length <= lim) {
-            lts = data[data.length - 1].timestamp;
-            let curimages = 0, curaudio = 0, curvideo = 0, curtext = 0;
-
-            data.forEach(info => {
-                let timelet = {created: info.timestamp*1000, modified: info.blog.updated*1000};
-                switch(info.type) {
-                    case "photo":
-                        info.photos.forEach(photo => {
-                            curimages++;
-                            if(t_image && photo.original_size.url) { images.store.set(photo.original_size.url, timelet); }
-                        });
-
-                        break;
-                    case "text" || "quote" || "chat" || "answer":
-                        curtext++;
-                        if(t_text) {
-                            if(info.type === "text") {
-                                timelet["text"] = stripHTML(info.body);
-                                text.store.set(info.id+".txt", timelet);
-                            } else if(info.type === "quote") {
-                                timelet["text"] = stripHTML(`${info.text}\n- ${info.source}`);
-                                text.store.set(info.id+".txt", timelet);
-                            } else if(info.type === "chat") {
-                                timelet["text"] = stripHTML(info.body);
-                                text.store.set(info.id+".txt", timelet);
-                            } else if(info.type === "answer") {
-                                timelet["text"] = stripHTML(`${info.asking_name} (${info.asking_url}): ${info.question}\n${info.blog_name } (${info.blog_url}): ${info.answer}`);
-                                text.store.set(info.id+".txt", timelet);
-                            }
-                        }
-
-                        break;
-                    case "audio":
-                        curaudio++;
-                        if(t_audio  && info.audio_source_url) {
-                            if(info.audio_type === "tumblr") {
-                                audio.store.set(info.audio_source_url, timelet);
-                            } else {
-                                udaudio++;
-                                audio.store.set(info.audio_source_url, undefined);
-                            }
-                        }
-
-                        if(t_image && info.album_art) { curimages++; images.store.set(info.album_art, timelet); }
-                        break;
-                    case "video":
-                        if(t_video && info.video_url) {
-                            curvideo++;
-                            video.store.set(info.video_url, timelet);
-                        }
-
-                        if(t_image && info.thumbnail_url) { curimages++; images.store.set(info.thumbnail_url, timelet); }
-                        break;
-                }
-            });
-            
-            totposts += data.length;
-            const date = new Date(lts*1000);
-            const timestring = `${date.toLocaleDateString()}, ${date.toLocaleTimeString()}`
-            totimages += curimages; totvideo += curvideo; totaudio += curaudio; tottext += curtext;
-            console.log(chalk.green(`Page ${chalk.white(i+1)} (${chalk.white(`From ${timestring}`)}): Got ${chalk.white(data.length)} post(s).`));
-            console.log(chalk.blueBright(`${chalk.green("└")} ${formatstats(curimages, "image")}, ${formatstats(curtext, "log")}, ${formatstats(curvideo, "video")}, and ${formatstats(curaudio, "audio file")}`));
-        } else {
-            console.error(chalk.red(!errwarn ? `Couldn't get any more images beyond (or overflowed on) page ${i}! Ended search.` : `Halted search on page ${i}.`));
-            if((images.store.size + video.store.size + text.store.size + audio.store.size) > 0) { break; } else { process.exit(1); }
-        }
+    for(let i = 0; i < max; i++) { 
+        const ret = await searchLoop(taggedPosts, tag, lts, lim, { images: images, text: text, audio: audio, video: video },  {images: t_image, text: t_text, audio: t_audio, video: t_video}, i); 
+        if(ret) {
+            lts = ret.newTime;
+            errwarn = ret.retWarn;
+            images = ret.stores.images; text = ret.stores.text; audio = ret.stores.audio; video = ret.stores.video;
+            totposts += ret.stats.posts; totimages += ret.stats.images; totaudio += ret.stats.audio; totvideo += ret.stats.video; tottext += ret.stats.text; udaudio += ret.stats.udaudio; 
+        } else break;
     }
 
     console.log(chalk.blueBright(`\nGot ${chalk.white(totposts)} post(s), containing a total of ${formatstats(totimages, "image")}, ${formatstats(tottext, "log")}, ${formatstats(totvideo, "video")}, and ${formatstats(totaudio, "audio file")}! (${formatstats(totaudio + totimages + tottext + totvideo, "file")})`));
@@ -393,104 +317,104 @@ async function apikeydload(key) {
 
     console.log(chalk.green("Downloading..."));
     let dloaded = 0, size = 0, errs = 0, fmad = false, rtdir = directory;
-        let promises = [];
-        for (const lp of [images, video, audio, text]) {
-            if (lp.store.size > 0) {
-                const npath = path.join(directory, lp.name);
-                await fs.mkdir(npath).then(() => {rtdir = npath}).catch(async err => {
-                    console.error(chalk.red(`Failed to create destination directory for "${chalk.white(lp.name)}." ${chalk.yellow("Checking if a folder already exists...")}\n└ ${err}`));
-                    await fs.access(npath, constants.W_OK).then(() => { 
-                        console.log(chalk.green(`A directory appears to already exists for "${chalk.white(lp.name)}." It will be used for writing.`));
-                        rtdir = npath;
-                    }).catch(aerr => { console.log(`Failed to check for an existing directory. The root directory will instead be used.\n└ ${aerr}`); rtdir = directory; });
-                });
-                
-                for (const [link, itime] of lp.store.entries()) {
-                    promises.push(
-                        new Promise(async(resolve, reject) => {
-                            if(lp.name === "audio" && !itime) {
-                                const fpath = path.join(rtdir, "audio_externalSources.log"), ap = (link + "\n");
-                                fs.appendFile(fpath, ap).then(() => {
-                                    if(!fmad) fmad = true; console.log(chalk.yellow(`Some audio sources were unable to be downloaded because they are on external sites. A file containing these sources has been saved to ${fpath}.`));
-                                    dloaded++;
-                                    size += ap.length;
-                                    resolve();
-                                }).catch(err => {
+    let promises = [];
+    for (const lp of [images, video, audio, text]) {
+        if (lp.store.size > 0) {
+            const npath = path.join(directory, lp.name);
+            await fs.mkdir(npath).then(() => {rtdir = npath}).catch(async err => {
+                console.error(chalk.red(`Failed to create destination directory for "${chalk.white(lp.name)}." ${chalk.yellow("Checking if a folder already exists...")}\n└ ${err}`));
+                await fs.access(npath, constants.W_OK).then(() => { 
+                    console.log(chalk.green(`A directory appears to already exists for "${chalk.white(lp.name)}." It will be used for writing.`));
+                    rtdir = npath;
+                }).catch(aerr => { console.log(`Failed to check for an existing directory. The root directory will instead be used.\n└ ${aerr}`); rtdir = directory; });
+            });
+            
+            for (const [link, itime] of lp.store.entries()) {
+                promises.push(
+                    new Promise(async(resolve, reject) => {
+                        if(lp.name === "audio" && !itime) {
+                            const fpath = path.join(rtdir, "audio_externalSources.log"), ap = (link + "\n");
+                            fs.appendFile(fpath, ap).then(() => {
+                                if(!fmad) { fmad = true; console.log(chalk.yellow(`Some audio sources were unable to be downloaded because they are on external sites. A file containing these sources has been saved to ${fpath}.`)); }
+                                dloaded++;
+                                size += ap.length;
+                                resolve();
+                            }).catch(err => {
+                                errs++;
+                                reject(`${chalk.bgRed(fpath)}\n${chalk.red("├")} ${chalk.redBright(`Failed to save an external audio source.\n${chalk.red("└─")} ${err}`)}`);
+                            });
+                        } else if(typeof(itime.text) === "undefined" || itime.text.length > 0) {
+                            const file_name = path.basename(link);
+                            let errstr = `${chalk.bgRed(file_name)}`;
+
+                            const fpath = path.join(rtdir, file_name),
+                                file = await fs.open(fpath, "w").catch(err => { reject(); });
+
+                            utimes(fpath, { btime: itime.created, mtime: itime.modified, atime: Date.now() }).catch(err => 
+                                { errs++; errstr += chalk.redBright(`\n${chalk.red("├")} Couldn't set creation, modification and access times.\n${chalk.red("└─")} ${err}`) });
+
+                            if(lp.name === "text") {
+                                file.writeFile(itime.text).then(() => { size += itime.text.length; dloaded++; file.close(); resolve(); }).catch(async err => {
                                     errs++;
-                                    reject(`${chalk.bgRed(fpath)}\n${chalk.red("├")} ${chalk.redBright(`Failed to save an external audio source.\n${chalk.red("└─")} ${err}`)}`);
+                                    reject(errstr + chalk.redBright(`\n${chalk.red("├")} Failed while piping data.\n${chalk.red("└─")} ${err}`));
+                                    await file.close();
+                                    fs.unlink(fpath);
                                 });
-                            } else if(typeof(itime.text) === "undefined" || itime.text.length > 0) {
-                                const file_name = path.basename(link);
-                                let errstr = `${chalk.bgRed(file_name)}`;
-    
-                                const fpath = path.join(rtdir, file_name),
-                                    file = await fs.open(fpath, "w").catch(err => { reject(); });
+                            } else {
+                                get(link, async(response)=> {
+                                    if(response.statusCode === 200) {
+                                        const stream = file.createWriteStream();
 
-                                utimes(fpath, { btime: itime.created, mtime: itime.modified, atime: Date.now() }).catch(err => 
-                                    { errs++; errstr += chalk.redBright(`\n${chalk.red("├")} Couldn't set creation, modification and access times.\n${chalk.red("└─")} ${err}`) });
-
-                                if(lp.name === "text") {
-                                    file.writeFile(itime.text).then(() => { size += itime.text.length; dloaded++; file.close(); resolve(); }).catch(async err => {
-                                        errs++;
-                                        reject(errstr + chalk.redBright(`\n${chalk.red("├")} Failed while piping data.\n${chalk.red("└─")} ${err}`));
-                                        await file.close();
-                                        fs.unlink(fpath);
-                                    });
-                                } else {
-                                    get(link, async(response)=> {
-                                        if(response.statusCode === 200) {
-                                            const stream = file.createWriteStream();
-
-                                            response.on("data", data => size += data.length);
-                                            response.pipe(stream).on("error", async err => {
-                                                errs++;
-                                                stream.destroy();
-                                                await file.close();
-                                                fs.unlink(fpath);
-                
-                                                if(err.name === "AbortError") {
-                                                    errstr += chalk.redBright(`\n${chalk.red("└")} Took an excessive time to pipe (x seconds).`);
-                                                } else {
-                                                    errstr += chalk.redBright(`\n${chalk.red("├")} Failed while piping data.\n${chalk.red("└─")} ${err}`);
-                                                }
-                
-                                                reject(errstr);
-                                            }).on("finish", async() => {
-                                                dloaded++;
-                                                await file.close();
-                                                resolve();
-                                            });
-                                        } else {
+                                        response.on("data", data => size += data.length);
+                                        response.pipe(stream).on("error", async err => {
                                             errs++;
-                                            reject(errstr + chalk.redBright(`\n${chalk.red("└")} Server returned a non-OK status code of ${response.statusCode} - ${response.statusMessage}.`));
-                                        }
-                                    }).on("error", err => {errs++; reject(errstr + chalk.redBright(`\n${chalk.red("├")} Failed to download ${file_name}\n${chalk.red("└─")} ${err}`)); } );
-                                }
+                                            stream.destroy();
+                                            await file.close();
+                                            fs.unlink(fpath);
+            
+                                            if(err.name === "AbortError") {
+                                                errstr += chalk.redBright(`\n${chalk.red("└")} Took an excessive time to pipe (x seconds).`);
+                                            } else {
+                                                errstr += chalk.redBright(`\n${chalk.red("├")} Failed while piping data.\n${chalk.red("└─")} ${err}`);
+                                            }
+            
+                                            reject(errstr);
+                                        }).on("finish", async() => {
+                                            dloaded++;
+                                            await file.close();
+                                            resolve();
+                                        });
+                                    } else {
+                                        errs++;
+                                        reject(errstr + chalk.redBright(`\n${chalk.red("└")} Server returned a non-OK status code of ${response.statusCode} - ${response.statusMessage}.`));
+                                    }
+                                }).on("error", err => {errs++; reject(errstr + chalk.redBright(`\n${chalk.red("├")} Failed to download ${file_name}\n${chalk.red("└─")} ${err}`)); } );
                             }
-                        })
-                    );
-                }
+                        }
+                    })
+                );
             }
         }
+    }
         
-        Promise.allSettled(promises).then(results => {
-            if (errs > 0) {
-                console.log(chalk.red("A total of ") + errs + chalk.red(" errors have happened."));
-                rl.question("Would you like to view them? > ").then(response => {
-                    if(response.match(yesreg)) {
-                        console.log();
-                        for(const promise of results) {
-                            if(promise.status === "rejected") {
-                                console.error(promise.reason);
-                            } 
+    /*Promise.allSettled(promises).then(results => {
+        if (errs > 0) {
+            console.log(chalk.red("A total of ") + errs + chalk.red(" errors have happened."));
+            rl.question("Would you like to view them? > ").then(response => {
+                if(response.match(yesreg)) {
+                    console.log();
+                    for(const promise of results) {
+                        if(promise.status === "rejected") {
+                            console.error(promise.reason);
                         } 
-                        console.log();
-                    }
-                });
-            }
+                    } 
+                    console.log();
+                }
+            });
+        }
 
-            console.log(chalk.green("All done!") + ` - ${dloaded} ` + chalk.blueBright("files downloaded with a total size of ") + `${(size/1000000).toFixed(2)} ` + chalk.blueBright("megabytes."));
-        }).catch(err => {console.log(err)});
+        console.log(chalk.green("All done!") + ` - ${dloaded} ` + chalk.blueBright("files downloaded with a total size of ") + `${(size/1000000).toFixed(2)} ` + chalk.blueBright("megabytes."));
+    }).catch(err => {console.log(err)});*/
 }
 
 async function pwdCreate() {
@@ -549,4 +473,98 @@ function deepEqual(x, y) {
         ok(x).length === ok(y).length &&
         ok(x).every(key => deepEqual(x[key], y[key]))
     ) : (x === y);
+}
+
+async function searchLoop(taggedPosts, tag, lastTimestamp, limit, stores, types, page) {
+    let conf, newLTS, data = [], cstats = { images: 0, text: 0, audio: 0, video: 0, udaudio: 0, posts: 0 }, errwarn;
+    await taggedPosts(tag, { before: lastTimestamp, limit: limit }).then(ret => data = ret).catch(async err => {
+        console.error(chalk.red(`An error has occurred while trying to get posts in tag "${tag}"\n└ ${err}`));
+        if(!errwarn) {
+            console.log(chalk.blueBright("\n1 - Continue crawling"));
+            console.log(chalk.blueBright("2 - Skip to downloading"));
+            console.log(chalk.blueBright("3 - Halt program"));
+            const intnum = Number(await rl.question("What would you like to do? > "));
+            rl.pause();
+            conf = isNaN(intnum) ? 3 : intnum > 3 ? 3 : intnum < 1 ? 1 : intnum
+            errwarn = true;
+            if(conf === 3) {
+                process.exit(0);
+            } else if (conf === 2) {
+                conf = true;
+            }
+        }
+    });
+    
+    if(conf === true) return false;
+    if(data.length > 0 && data.length <= limit) {
+        newLTS = data[data.length - 1].timestamp;
+        cstats.posts++;
+
+        data.forEach(info => {
+            let timelet = {created: info.timestamp*1000, modified: info.blog.updated*1000};
+            switch(info.type) {
+                case "photo":
+                    info.photos.forEach(photo => {
+                        cstats.images++;
+                        if(types["images"] && photo.original_size.url) { stores.images.store.set(photo.original_size.url, timelet); }
+                    });
+
+                    break;
+                case "text" || "quote" || "chat" || "answer":
+                    cstats.text++;
+                    if(types["text"]) {
+                        if(info.type === "text") {
+                            timelet["text"] = stripHTML(info.body);
+                            stores.text.store.set(info.id+".txt", timelet);
+                        } else if(info.type === "quote") {
+                            timelet["text"] = stripHTML(`${info.text}\n- ${info.source}`);
+                            stores.text.store.set(info.id+".txt", timelet);
+                        } else if(info.type === "chat") {
+                            timelet["text"] = stripHTML(info.body);
+                            stores.text.store.set(info.id+".txt", timelet);
+                        } else if(info.type === "answer") {
+                            timelet["text"] = stripHTML(`${info.asking_name} (${info.asking_url}): ${info.question}\n${info.blog_name } (${info.blog_url}): ${info.answer}`);
+                            stores.text.store.set(info.id+".txt", timelet);
+                        }
+                    }
+
+                    break;
+                case "audio":
+                    cstats.audio++;
+                    if(types["audio"]  && info.audio_source_url) {
+                        if(info.audio_type === "tumblr") {
+                            stores.audio.store.set(info.audio_source_url, timelet);
+                        } else {
+                            cstats.udaudio++;
+                            stores.audio.store.set(info.audio_source_url, undefined);
+                        }
+                    }
+
+                    if(types["images"] && info.album_art) { cstats.images++; stores.images.store.set(info.album_art, timelet); }
+                    break;
+                case "video":
+                    if(types["video"] && info.video_url) {
+                        cstats.video++;
+                        stores.video.store.set(info.video_url, timelet);
+                    }
+
+                    if(types["images"] && info.thumbnail_url) { cstats.images++; stores.images.store.set(info.thumbnail_url, timelet); }
+                    break;
+            }
+        });
+        
+        const date = new Date((data[0].timestamp)*1000);
+        const timestring = `${date.toLocaleDateString()}, ${date.toLocaleTimeString()}`
+        console.log(chalk.green(`Page ${chalk.white(page+1)} (${chalk.white(`From ${timestring}`)}): Got ${chalk.white(data.length)} post(s).`));
+        console.log(chalk.blueBright(`${chalk.green("└")} ${formatstats(cstats.images, "image")}, ${formatstats(cstats.text, "log")}, ${formatstats(cstats.video, "video")}, and ${formatstats(cstats.audio, "audio file")}`));
+    } else {
+        if(conf === 1) {
+            searchLoop(taggedPosts, lastTimestamp, limit);
+        } else {
+            console.error(chalk.red(!errwarn ? `Couldn't get any more files on page ${page+1}! Ended search.` : `Halted search on page ${i}.`));
+            if((stores.images.store.size + stores.video.store.size + stores.text.store.size + stores.audio.store.size) > 0) { return false; } else { process.exit(1); }
+        }
+    }
+
+    return {stats: cstats, stores: stores, newTime: newLTS, retWarn: errwarn};
 }
