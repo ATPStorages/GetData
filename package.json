@@ -1,0 +1,33 @@
+{
+  "name": "getdata",
+  "version": "1.0.0",
+  "description": "Get tumblr images for data.",
+  "main": "index.js",
+  "bin": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Miko Elbrecht",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^0.26.0",
+    "bcrypt": "^5.0.1",
+    "chalk": "^4.1.2",
+    "jsdom": "^19.0.0",
+    "progress": "^2.0.3",
+    "speed-limiter": "^1.0.2",
+    "tumblr.js": "^3.0.0",
+    "utimes": "^4.1.1",
+    "yargs": "^17.3.1"
+  },
+  "pkg": {
+    "scripts": [],
+    "assets": [
+      "node_modules/**/*"
+    ],
+    "targets": [
+      "latest-win-x64"
+    ],
+    "outputPath": "dist"
+  }
+}
