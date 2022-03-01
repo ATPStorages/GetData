@@ -24,11 +24,6 @@ const chalk = require("chalk"),
         output: process.stdout
     });
 
-process.on('unhandledRejection', (reason, promise) => {
-    console.log('Unhandled Rejection at:', promise, 'reason:', reason);
-    // Application specific logging, throwing an error, or other logic here
-});
-
 const args = cons
     .usage(`Usage: ${filename} <command> [options]`)
     .command('config', 'Open in configuration mode')
@@ -251,10 +246,14 @@ async function apikeydload(key) {
         console.log(chalk.green("Verified client key.\n"));
     } catch(err) {
         console.log(chalk.red(`An error has occurred while trying to verify your client key.\n└ ${err}`));
-        if((await rl.question(`Would you like to enter it? > `)).match(yesreg)) {
-            console.log();
-            return keyCreate().then(key => apikeydload(key)).catch(err => { console.log(err); process.exit(1); });
-        } else { process.exit(1); }
+        console.log(chalk.blueBright(`\nType "bypass" to skip verification. ${chalk.red("(Might be unstable)")}`));
+        const ans = await rl.question(`Would you like to enter it? > `);
+        if(ans.toLowerCase() !== "bypass") {
+            if(ans.match(yesreg)) {
+                console.log();
+                keyCreate().then(key => apikeydload(key)).catch(err => { console.log(err); process.exit(1); });
+            } else { process.exit(1); }
+        }
     }
 
     const tag = args.tag || await rl.question("What tag would you like to search? > ");
@@ -298,6 +297,7 @@ async function apikeydload(key) {
     rl.pause();
     for(let i = 0; i < max; i++) { 
         const ret = await searchLoop(taggedPosts, tag, lts, lim, { images: images, text: text, audio: audio, video: video },  {images: t_image, text: t_text, audio: t_audio, video: t_video}, i); 
+
         if(ret) {
             lts = ret.newTime;
             errwarn = ret.retWarn;
@@ -557,14 +557,13 @@ async function searchLoop(taggedPosts, tag, lastTimestamp, limit, stores, types,
         const timestring = `${date.toLocaleDateString()}, ${date.toLocaleTimeString()}`
         console.log(chalk.green(`Page ${chalk.white(page+1)} (${chalk.white(`From ${timestring}`)}): Got ${chalk.white(data.length)} post(s).`));
         console.log(chalk.blueBright(`${chalk.green("└")} ${formatstats(cstats.images, "image")}, ${formatstats(cstats.text, "log")}, ${formatstats(cstats.video, "video")}, and ${formatstats(cstats.audio, "audio file")}`));
+        return {stats: cstats, stores: stores, newTime: newLTS, retWarn: errwarn};
     } else {
         if(conf === 1) {
-            searchLoop(taggedPosts, lastTimestamp, limit);
+            return await searchLoop(taggedPosts, tag, lastTimestamp, limit, stores, types, page);
         } else {
             console.error(chalk.red(!errwarn ? `Couldn't get any more files on page ${page+1}! Ended search.` : `Halted search on page ${i}.`));
             if((stores.images.store.size + stores.video.store.size + stores.text.store.size + stores.audio.store.size) > 0) { return false; } else { process.exit(1); }
         }
     }
-
-    return {stats: cstats, stores: stores, newTime: newLTS, retWarn: errwarn};
 }
