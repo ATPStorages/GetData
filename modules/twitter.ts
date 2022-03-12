@@ -3,7 +3,7 @@ import TwitterApiv2ReadOnly from "twitter-api-v2/dist/v2/client.v2.read";
 import TwitterApi, { TweetSearchAllV2Paginator, Tweetv2SearchParams } from "twitter-api-v2";
 type authTable   = { client_key?: string, client_secret?: string, bearer_token?: string};
 
-type  postOptions = { pages: number, iterate?: boolean, searchOptions?: Tweetv2SearchParams }
+type  postOptions = { pages: number, iterate?: boolean, searchOptions?: Partial<Tweetv2SearchParams> }
 const postDefault = { pages: 1, iterate: false }
 
 // Authentication
@@ -50,10 +50,9 @@ function authenticate(key: any, secret?: string): TwitterApiv2ReadOnly {
 function collectPostsRecent(query: string, authentication: authTable | TwitterApiv2ReadOnly, options: postOptions=postDefault): Promise<TweetSearchAllV2Paginator | {}> {
     const session = authenticate(authentication);
     return new Promise((resolve, reject) => {
-        const paginator = session.search(query)
-        
+        const paginator = session.search(query, options.searchOptions).catch(err => reject(err));
+        // TODO: Page
     });
 }
 
-module.exports.authenticate = authenticate;
-module.exports.collectPosts = collectPostsRecent;
+export { authenticate, collectPostsRecent };

@@ -7,12 +7,11 @@
     "getdata": "index.js"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "pkg package.json"
   },
   "author": "Miko Elbrecht",
   "license": "ISC",
   "dependencies": {
-    "axios": "^0.26.0",
     "bcrypt": "^5.0.1",
     "chalk": "^4.1.2",
     "common-tags": "^1.8.2",
@@ -20,8 +19,8 @@
     "e621": "^2.1.11",
     "follow-redirects": "^1.14.9",
     "inquirer": "^8.2.0",
+    "is-objects-equal": "^1.0.0",
     "jsdom": "^19.0.0",
-    "lodash": "^4.17.21",
     "progress": "^2.0.3",
     "reddit": "^1.2.1",
     "speed-limiter": "^1.0.2",
@@ -58,5 +57,9 @@
   "bugs": {
     "url": "https://github.com/ATPStorages/GetData/issues"
   },
-  "homepage": "https://github.com/ATPStorages/GetData#readme"
+  "homepage": "https://github.com/ATPStorages/GetData#readme",
+  "devDependencies": {
+    "@types/follow-redirects": "^1.14.1",
+    "@types/inquirer": "^8.2.0"
+  }
 }
