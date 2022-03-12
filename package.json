@@ -20,14 +20,11 @@
     "follow-redirects": "^1.14.9",
     "inquirer": "^8.2.0",
     "is-objects-equal": "^1.0.0",
-    "jsdom": "^19.0.0",
-    "progress": "^2.0.3",
     "reddit": "^1.2.1",
     "speed-limiter": "^1.0.2",
     "tumblr.js": "^3.0.0",
     "twitter-api-v2": "^1.11.0",
-    "utimes": "^4.1.1",
-    "yargs": "^17.3.1"
+    "utimes": "^4.1.1"
   },
   "pkg": {
     "scripts": [],
