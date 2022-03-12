@@ -68,17 +68,16 @@ async function main(saveData?: string) {
     printLine(yellow("Checking for configuration data"));
     const confpath = join(userData, "config");
     let data = {}, awaitcall = true, modified = false;
+    await fs.readFile(confpath).then(async (buffer: Buffer) => data = JSON.parse(buffer.toString()));
 
     if(saveData) {
         const parsed = JSON.parse(saveData);
-        fs.readFile(confpath).then((buffer: Buffer) => {
-            if(!isEqual([JSON.parse(buffer.toString()), parsed])) {
-                fs.writeFile(confpath, saveData).then(() => { data = parsed; modified = true; }).catch((err: Error) => {
-                    console.error(red(`\nFailed to write passed configuration data.\n=> Data: ${saveData}\n=> ${err}`));
-                    process.exit(1);
-                });
-            }
-        });
+        if(!isEqual([data, parsed])) {
+            await fs.writeFile(confpath, saveData).then(() => { data = parsed; modified = true; }).catch((err: Error) => {
+                console.error(red(`\nFailed to write passed configuration data.\n=> Data: ${saveData}\n=> ${err}`));
+                process.exit(1);
+            });
+        }
     } else {
         await fs.open(confpath, "r+").then(async (handle: fs.FileHandle) => {
             await handle.readFile().then((ret: Buffer) => { data = JSON.parse(ret.toString()); });
